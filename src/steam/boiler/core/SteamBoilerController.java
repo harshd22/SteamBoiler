@@ -11,6 +11,19 @@ import steam.boiler.util.Mailbox.Mode;
 
 public class SteamBoilerController {
 
+	
+	private Pump pumps[];
+	private Mailbox.Mode mode;
+	private double M1;
+	private double M2;
+	private double N1;
+	private double N2;
+	private double steam_V = 0;
+	private double waterLevel = 0;
+	private double evacuationRate ;
+	private double capacity;
+	private double maximalSteamRate;
+	
   /**
    * Construct a steam boiler controller for a given set of characteristics.
    *
@@ -18,7 +31,21 @@ public class SteamBoilerController {
    *          The boiler characteristics to be used.
    */
   public SteamBoilerController(SteamBoilerCharacteristics configuration) {
-
+	  pumps = new Pump[configuration.getNumberOfPumps()];
+	  mode = Mailbox.Mode.INITIALISATION;
+	  M2 = configuration.getMaximalLimitLevel();
+	  M1 = configuration.getMinimalLimitLevel();
+	  N1 = configuration.getMinimalLimitLevel();
+	  N2 = configuration.getMaximalNormalLevel();
+	  evacuationRate = configuration.getEvacuationRate();
+	  capacity = configuration.getCapacity();
+	  maximalSteamRate = configuration.getMaximualSteamRate();
+	   for(int index = 0 ; index < configuration.getNumberOfPumps() ; index++) {
+		   pumps[index].setPumpCapacity(configuration.getPumpCapacity(index));
+	   }
+	  
+	  
+	  
   }
 
   /**
