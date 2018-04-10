@@ -14,4 +14,16 @@
 	<natures>
 		<nature>org.eclipse.jdt.core.javanature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>src/steam/boiler/tests/FunctionalTests.java</name>
+			<type>1</type>
+			<locationURI>PARENT-3-PROJECT_LOC/Downloads/FunctionalTests.java</locationURI>
+		</link>
+		<link>
+			<name>src/steam/boiler/tests/SafetyTests.java</name>
+			<type>1</type>
+			<locationURI>PARENT-3-PROJECT_LOC/Downloads/SafetyTests.java</locationURI>
+		</link>
+	</linkedResources>
 </projectDescription>

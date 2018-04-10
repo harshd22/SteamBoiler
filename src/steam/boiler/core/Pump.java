@@ -5,6 +5,12 @@ public class Pump {
 	private boolean isOn;
 	private boolean isControllerOn;
 	private double pumpCapacity;
+	
+	public Pump() {
+		isOn = false;
+		isControllerOn = false;
+		pumpCapacity = 0;
+	}
 
 	public boolean isOn() {
 		return isOn;
@@ -18,7 +24,7 @@ public class Pump {
 		return pumpCapacity;
 	}
 
-	public void setOn(boolean isOn) {
+	public void setIsOn(boolean isOn) {
 		this.isOn = isOn;
 	}
 
@@ -31,3 +37,4 @@ public class Pump {
 	}
 
 }
+
