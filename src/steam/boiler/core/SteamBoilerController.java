@@ -14,6 +14,7 @@ public class SteamBoilerController {
 
 	private Pump pumps[];
 	private Mailbox.Mode mode;
+	private int activePumps = 0;
 	private double M1;
 	private double M2;
 	private double N1;
@@ -21,10 +22,11 @@ public class SteamBoilerController {
 	private double steam_V = 0;
 	private double waterLevel = 0;
 	private double evacuationRate;
-	private double capacity;
+	private double tankCapacity;
 	private double maximalSteamRate;
 	private boolean arePhysicalUnitsReadv;
 	private boolean isSteamBoilerWaiting;
+	private boolean isValveOpen = false;
 
 	/**
 	 * Construct a steam boiler controller for a given set of characteristics.
@@ -53,7 +55,7 @@ public class SteamBoilerController {
 		N1 = configuration.getMinimalLimitLevel();
 		N2 = configuration.getMaximalNormalLevel();
 		evacuationRate = configuration.getEvacuationRate();
-		capacity = configuration.getCapacity();
+		tankCapacity = configuration.getCapacity();
 		maximalSteamRate = configuration.getMaximualSteamRate();
 
 		arePhysicalUnitsReadv = false;
@@ -75,7 +77,7 @@ public class SteamBoilerController {
 	public void clock(Mailbox incoming, Mailbox outgoing) {
 
 		for (int index = 0; index < incoming.size(); index++) {
-			checkMessage(incoming.read(index));
+			checkMessage(incoming.read(index) , outgoing);
 		}
 
 		switch (mode) {
@@ -106,6 +108,7 @@ public class SteamBoilerController {
 	}
 
 	private void emergencyStop(Mailbox outgoing) {
+		outgoing.send(new Message(Mailbox.MessageKind.MODE_m, Mailbox.Mode.EMERGENCY_STOP));
 
 	}
 
@@ -115,21 +118,58 @@ public class SteamBoilerController {
 
 	private void normal(Mailbox outgoing) {
 
+		if (waterLevel < M1 || waterLevel > M2) {
+			emergencyStop(outgoing);
+		}
+		if (waterLevel <= 0 || waterLevel > tankCapacity) {
+			 outgoing.send(new Message(Mailbox.MessageKind.LEVEL_FAILURE_DETECTION));
+			outgoing.send(new Message(Mailbox.MessageKind.MODE_m, Mailbox.Mode.RESCUE));
+			//return;
+		}else if (steam_V < 0 || steam_V >= tankCapacity) {
+		      outgoing.send(new Message(Mailbox.MessageKind.MODE_m, Mailbox.Mode.DEGRADED));
+		      outgoing.send(new Message(Mailbox.MessageKind.STEAM_FAILURE_DETECTION));
+		     // return;
+		    }
+		
+		if (waterLevel > N2) {
+			openPumps(1, outgoing);
+		} else if (waterLevel < N1) {
+			openPumps(getActivePumps()+1, outgoing);
+			
+		}else if (waterLevel > (N1 + (N2 - N1) * (50.0/100.0))) {
+			openPumps(getActivePumps()-1, outgoing);
+		}else if(waterLevel < (N1 + (N2 - N1) * (50.0/100.0))) {
+			openPumps(getActivePumps()+1, outgoing);
+		//	openPumps(getActivePumps()+1, outgoing);
+		}
+
+	}
+
+	private int getActivePumps() {
+		activePumps = 0;
+		for(int index =0 ; index < pumps.length ; index++) {
+			if(pumps[index].isOn()) {
+				activePumps++;
+			}
+		}
+		return activePumps;
 	}
 
 	private void initialisation(Mailbox outgoing) {
-
+		if (waterLevel < 0 || waterLevel > tankCapacity) {
+			emergencyStop(outgoing);
+		}
 		if (arePhysicalUnitsReadv) {
+			if(isValveOpen) {
+				outgoing.send(new Message(Mailbox.MessageKind.VALVE));
+				isValveOpen = false;
+			}
 			isSteamBoilerWaiting = false;
 			mode = Mailbox.Mode.NORMAL;
 			outgoing.send(new Message(Mailbox.MessageKind.MODE_m, mode));
 			return;
-		}
-		
-		
-		
-		else if (isSteamBoilerWaiting) {
-			
+		}else if (isSteamBoilerWaiting) {
+
 			if (steam_V != 0) {
 				outgoing.send(new Message(Mailbox.MessageKind.MODE_m, Mailbox.Mode.EMERGENCY_STOP));
 			}
@@ -149,14 +189,19 @@ public class SteamBoilerController {
 			double cap = (N1 + N2 / 2) - waterLevel;
 			cap /= (15 * pumps[0].getPumpCapacity());
 			cap = Math.min(cap, pumps.length);
-			openPumps(cap, outgoing);
+			openPumps((int)cap, outgoing);
 
 		} else if (waterLevel > N2) {
 			outgoing.send(new Message(Mailbox.MessageKind.VALVE));
+			isValveOpen = true;
+
 		}
 	}
 
-	private void openPumps(double number, Mailbox outgoing) {
+	private void openPumps(int number, Mailbox outgoing) {
+		assert number <= pumps.length;
+		
+		closeAllPumps(outgoing);
 		for (int index = 0; index < number; index++) {
 			pumps[index].setIsOn(true);
 			outgoing.send(new Message(Mailbox.MessageKind.OPEN_PUMP_n, index));
@@ -172,7 +217,7 @@ public class SteamBoilerController {
 
 	}
 
-	private void checkMessage(Message message) {
+	private void checkMessage(Message message, Mailbox outgoing) {
 		switch (message.getKind()) {
 		case MODE_m:
 			mode = message.getModeParameter();
@@ -201,7 +246,9 @@ public class SteamBoilerController {
 		case STEAM_v:
 			steam_V = message.getDoubleParameter();
 			break;
-
+		case LEVEL_FAILURE_ACKNOWLEDGEMENT:
+			emergencyStop(outgoing);
+			break;
 		default:
 			break;
 
