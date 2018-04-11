@@ -1,7 +1,5 @@
 package steam.boiler.core;
 
-import steam.boiler.model.PhysicalUnits;
-
 //import org.eclipse.jdt.annotation.NonNull;
 //import org.eclipse.jdt.annotation.Nullable;
 
@@ -27,7 +25,6 @@ public class SteamBoilerController {
 	private boolean arePhysicalUnitsReadv;
 	private boolean isSteamBoilerWaiting;
 	private boolean isValveOpen = false;
-	PhysicalUnits.Mode mm ;
 
 	/**
 	 * Construct a steam boiler controller for a given set of characteristics.
@@ -37,11 +34,11 @@ public class SteamBoilerController {
 	 */
 	public SteamBoilerController(SteamBoilerCharacteristics configuration) {
 		initialize(configuration);
-
+		
 	}
 
 	private void initialize(SteamBoilerCharacteristics configuration) {
-	
+
 		pumps = new Pump[configuration.getNumberOfPumps()];
 		for (int index = 0; index < pumps.length; index++) {
 			pumps[index] = new Pump();
@@ -49,11 +46,11 @@ public class SteamBoilerController {
 		for (int index = 0; index < configuration.getNumberOfPumps(); index++) {
 			pumps[index].setPumpCapacity(configuration.getPumpCapacity(index));
 		}
-		mm= PhysicalUnits.Mode.WAITING;
 		mode = Mailbox.Mode.INITIALISATION;
-		M2 = configuration.getMaximalLimitLevel();
+		
 		M1 = configuration.getMinimalLimitLevel();
-		N1 = configuration.getMinimalLimitLevel();
+		M2 = configuration.getMaximalLimitLevel();
+		N1 = configuration.getMinimalNormalLevel();
 		N2 = configuration.getMaximalNormalLevel();
 		evacuationRate = configuration.getEvacuationRate();
 		tankCapacity = configuration.getCapacity();
@@ -83,7 +80,6 @@ public class SteamBoilerController {
 
 		switch (mode) {
 		case INITIALISATION:
-
 			initialisation(outgoing);
 			break;
 		case NORMAL:
@@ -105,6 +101,10 @@ public class SteamBoilerController {
 	}
 
 	private void rescue(Mailbox outgoing) {
+		waterLevelCheck(outgoing);
+		if(steam_V < 0 || steam_V >= tankCapacity) {
+			emergencyStop(outgoing);
+		}
 
 	}
 
@@ -114,32 +114,27 @@ public class SteamBoilerController {
 	}
 
 	private void degraded(Mailbox outgoing) {
-		if (waterLevel < M1 || waterLevel > M2) {
-			emergencyStop(outgoing);
-		}
-		
-		if(waterLevel < 0 || waterLevel >= tankCapacity) {
-			emergencyStop(outgoing);
-		}
-		//checkWaterLevelFailure(outgoing);
-		//checkPumpFailure(outgoing);
+
+		waterLevelCheck(outgoing);
+		checkWaterLevelFailure(outgoing);
+		// checkPumpFailure(outgoing);
 		if (waterLevel > N2) {
 			openPumps(1, outgoing);
 		} else if (waterLevel < N1) {
+			openPumps(getActivePumps() + 1, outgoing);
 			openPumps(getActivePumps() + 1, outgoing);
 
 		} else if (waterLevel > (N1 + (N2 - N1) * (50.0 / 100.0))) {
 			openPumps(getActivePumps() - 1, outgoing);
 		} else if (waterLevel < (N1 + (N2 - N1) * (50.0 / 100.0))) {
 			openPumps(getActivePumps() + 1, outgoing);
+			
 		}
 	}
 
 	private void normal(Mailbox outgoing) {
-		
-		if (waterLevel < M1 || waterLevel > M2) {
-			emergencyStop(outgoing);
-		}
+
+		waterLevelCheck(outgoing);
 		checkWaterLevelFailure(outgoing);
 		checkSteamFailure(outgoing);
 
@@ -170,17 +165,15 @@ public class SteamBoilerController {
 			outgoing.send(new Message(Mailbox.MessageKind.MODE_m, mode));
 			return;
 		} else if (isSteamBoilerWaiting) {
-
+			
 			if (steam_V != 0) {
 				outgoing.send(new Message(Mailbox.MessageKind.MODE_m, Mailbox.Mode.EMERGENCY_STOP));
 			}
 			if (N1 < waterLevel && waterLevel < N2) {
 				outgoing.send(new Message(Mailbox.MessageKind.PROGRAM_READY));
-				mm =  PhysicalUnits.Mode.READY;
 			} else {
 				adjustWaterLevel(outgoing);
 			}
-			
 
 		}
 		outgoing.send(new Message(MessageKind.MODE_m, Mailbox.Mode.INITIALISATION));
@@ -197,9 +190,10 @@ public class SteamBoilerController {
 	}
 
 	private void adjustWaterLevel(Mailbox outgoing) {
-		if (waterLevel <= N1) {
-			double cap = (N1 + N2 / 2) - waterLevel;
-			cap /= (13.5 * pumps[0].getPumpCapacity());
+		if (waterLevel < N1) {
+			double cap = (M1 + N2 / 2) - waterLevel;
+			cap /= (15 * pumps[0].getPumpCapacity());
+			
 			cap = Math.min(cap, pumps.length);
 			openPumps((int) cap, outgoing);
 
@@ -207,6 +201,8 @@ public class SteamBoilerController {
 			outgoing.send(new Message(Mailbox.MessageKind.VALVE));
 			isValveOpen = true;
 
+		}else if(waterLevel == N1) {
+			openPumps(1, outgoing);
 		}
 	}
 
@@ -251,12 +247,18 @@ public class SteamBoilerController {
 	private void checkPumpFailure(Mailbox outgoing) {
 		for (int index = 0; index < pumps.length; index++) {
 			if (pumps[index].isControllerOn() != pumps[index].isOn()) {
-				System.out.println("hh");
 				outgoing.send(new Message(Mailbox.MessageKind.PUMP_FAILURE_DETECTION_n));
 				outgoing.send(new Message(Mailbox.MessageKind.MODE_m, Mailbox.Mode.DEGRADED));
 			}
 		}
 	}
+
+	private void waterLevelCheck(Mailbox outgoing) {
+		if (waterLevel < M1 || waterLevel > M2) {
+			emergencyStop(outgoing);
+		}
+	}
+
 
 	private void checkMessage(Message message, Mailbox outgoing) {
 		switch (message.getKind()) {
