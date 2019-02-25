@@ -80,7 +80,6 @@ public class SteamBoilerController {
 
     checkMessage(incoming, outgoing);
     checkMode(outgoing);
-   
   }
 
   /**
@@ -222,7 +221,6 @@ public class SteamBoilerController {
          && (getWaterLevel() < 0 || getWaterLevel() >= getTankCapacity())) {
       emergencyStop(outgoing);
     }
-    
     maintainWaterLevel(outgoing);
   }
 
@@ -236,7 +234,7 @@ public class SteamBoilerController {
     if (getWaterLevel() > getN2()) {
       openPumps(1, outgoing);
     } else if (getWaterLevel() < getN1()) {
-      openPumps(getOpenedPumps() + 1, outgoing);
+      openPumps(w, outgoing);
       // maintain the water level between the midpoint of N1 and N2
     } else if (getWaterLevel() > (getN1() + (getN2() - getN1()) * (50.0 / 100.0))) {
       openPumps(getOpenedPumps() - 1, outgoing);

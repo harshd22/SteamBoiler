@@ -11,9 +11,8 @@ public class Pump {
   private boolean isControllerOn; 
   private double pumpCapacity;
   private boolean isBroken;
-  
   /**
- * Pump constructor it initialisis all the variables.
+ * Pump constructor it initialize all the variables.
  */
   public Pump() {
     this.isOn = false;
